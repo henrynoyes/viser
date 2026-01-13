@@ -65,11 +65,14 @@ export const IcosphereMesh = React.forwardRef<
     });
   }, [shadowOpacity]);
 
+  // Support non-uniform scaling
+  const scale = (message.props.scale || [1, 1, 1]).map((s: number) => s * message.props.radius) as [number, number, number];
+
   return (
     <group ref={ref}>
       <mesh
         geometry={geometry}
-        scale={message.props.radius}
+        scale={scale}
         material={material}
         castShadow={message.props.cast_shadow}
         receiveShadow={message.props.receive_shadow === true}
