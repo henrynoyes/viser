@@ -106,6 +106,7 @@ export function createStandardMaterial(props: {
     wireframe: props.wireframe,
     transparent: props.opacity !== null,
     opacity: props.opacity ?? 1.0,
+    depthWrite: props.opacity === null,
     side: {
       front: THREE.FrontSide,
       back: THREE.BackSide,
