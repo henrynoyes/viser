@@ -101,12 +101,13 @@ export function createStandardMaterial(props: {
   flat_shading: boolean;
   side: "front" | "back" | "double";
 }): THREE.Material {
+  const isTransparent = props.opacity !== null && props.opacity < 1.0;
   const standardArgs = {
     color: props.color === undefined ? 0xffffff : rgbToInt(props.color),
     wireframe: props.wireframe,
-    transparent: props.opacity !== null,
+    transparent: isTransparent,
     opacity: props.opacity ?? 1.0,
-    depthWrite: props.opacity === null,
+    depthWrite: !isTransparent,
     side: {
       front: THREE.FrontSide,
       back: THREE.BackSide,
