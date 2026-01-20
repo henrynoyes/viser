@@ -33,6 +33,9 @@ function useMessageHandler() {
   const removeSceneNode = viewer.sceneTreeActions.removeSceneNode;
   const addSceneNode = viewer.sceneTreeActions.addSceneNode;
   const setTheme = viewer.useGui((state) => state.setTheme);
+
+  // Initial camera store actions for updating reset view state.
+  const initialCamera = viewer.useInitialCamera;
   const setShareUrl = viewer.useGui((state) => state.setShareUrl);
   const addGui = viewer.useGui((state) => state.addGui);
   const addModal = viewer.useGui((state) => state.addModal);
@@ -163,7 +166,6 @@ function useMessageHandler() {
 
       // Add a notification.
       case "NotificationMessage": {
-        console.log(message.uuid, message.props.loading);
         (message.mode === "show" ? notifications.show : notifications.update)({
           id: message.uuid,
           title: message.props.title,
@@ -171,7 +173,10 @@ function useMessageHandler() {
           withCloseButton: message.props.with_close_button,
           loading: message.props.loading,
           autoClose:
-            message.props.auto_close_seconds === null
+            // Handle both null and falsy values (e.g., if False is accidentally
+            // passed from Python) as "no auto-close".
+            message.props.auto_close_seconds === null ||
+            !message.props.auto_close_seconds
               ? false
               : message.props.auto_close_seconds * 1000,
           color: toMantineColor(message.props.color),
@@ -238,6 +243,17 @@ function useMessageHandler() {
         break;
       }
       case "SetCameraLookAtMessage": {
+        // Setting initial camera parameters.
+        const wasDefault = initialCamera.getState().lookAt.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setLookAt(message.look_at, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          if (!wasDefault) return;
+        }
+
         const cameraControls = viewerMutable.cameraControl!;
 
         const T_threeworld_world = computeT_threeworld_world(viewer);
@@ -251,6 +267,17 @@ function useMessageHandler() {
         return;
       }
       case "SetCameraUpDirectionMessage": {
+        // Setting initial camera parameters.
+        const wasDefault = initialCamera.getState().up.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setUp(message.position, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          if (!wasDefault) return;
+        }
+
         const camera = viewerMutable.camera!;
         const cameraControls = viewerMutable.cameraControl!;
         const T_threeworld_world = computeT_threeworld_world(viewer);
@@ -281,6 +308,20 @@ function useMessageHandler() {
         return;
       }
       case "SetCameraPositionMessage": {
+        console.log("set camera position");
+        // Setting initial camera parameters.
+        const wasDefault =
+          initialCamera.getState().position.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setPosition(message.position, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          console.log(message.initial, wasDefault);
+          if (!wasDefault) return;
+        }
+
         const cameraControls = viewerMutable.cameraControl!;
 
         // Set the camera position. Due to the look-at, note that this will
@@ -302,6 +343,17 @@ function useMessageHandler() {
         return;
       }
       case "SetCameraFovMessage": {
+        // Setting initial camera parameters.
+        const wasDefault = initialCamera.getState().fov.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setFov(message.fov, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          if (!wasDefault) return;
+        }
+
         const camera = viewerMutable.camera!;
         // tan(fov / 2.0) = 0.5 * film height / focal length
         // focal length = 0.5 * film height / tan(fov / 2.0)
@@ -312,12 +364,34 @@ function useMessageHandler() {
         return;
       }
       case "SetCameraNearMessage": {
+        // Setting initial camera parameters.
+        const wasDefault = initialCamera.getState().near.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setNear(message.near, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          if (!wasDefault) return;
+        }
+
         const camera = viewerMutable.camera!;
         camera.near = message.near;
         camera.updateProjectionMatrix();
         return;
       }
       case "SetCameraFarMessage": {
+        // Setting initial camera parameters.
+        const wasDefault = initialCamera.getState().far.source === "default";
+        if (message.initial) {
+          // URL params take priority, ignore server's initial value.
+          initialCamera.getState().setFar(message.far, "message");
+
+          // If this is the first initial camera: we'll also move the actual
+          // camera. If not, we return immediately.
+          if (!wasDefault) return;
+        }
+
         const camera = viewerMutable.camera!;
         camera.far = message.far;
         camera.updateProjectionMatrix();
@@ -594,6 +668,7 @@ export function FrameSynchronizedMessageHandler() {
   const messageQueue = viewerMutable.messageQueue;
   const splatContext = React.useContext(GaussianSplatsContext)!;
   const gl = useThree((state) => state.gl);
+  const isFirstBatchRef = React.useRef(true);
 
   useFrame(
     () => {
@@ -717,6 +792,31 @@ export function FrameSynchronizedMessageHandler() {
             ? requestRenderIndex + 1
             : messageQueue.length;
         const processBatch = messageQueue.splice(0, numMessages);
+
+        // Hack: On the very first batch, handle any root node SetOrientationMessage
+        // (from set_up_direction()) before all other messages. This ensures
+        // T_threeworld_world is up-to-date when initial camera messages are processed.
+        if (isFirstBatchRef.current) {
+          isFirstBatchRef.current = false;
+          const rootOrientationIndex = processBatch.findIndex(
+            (msg) => msg.type === "SetOrientationMessage" && msg.name === "",
+          );
+          if (rootOrientationIndex !== -1) {
+            const rootNodeUpdate = handleMessage(
+              processBatch[rootOrientationIndex],
+            )!;
+            const rootNode = viewer.useSceneTree.getState()[""]!;
+            viewer.useSceneTree.setState({
+              "": {
+                ...rootNode,
+                wxyz: rootNodeUpdate.updates.wxyz!,
+              },
+            });
+
+            // Remove the message from the batch.
+            processBatch.splice(rootOrientationIndex, 1);
+          }
+        }
 
         // Handle messages and accumulate updates.
         const updates = processBatch.map(handleMessage).reduce(

@@ -1234,6 +1234,7 @@ export interface SetBonePositionMessage {
 export interface SetCameraPositionMessage {
   type: "SetCameraPositionMessage";
   position: [number, number, number];
+  initial: boolean;
 }
 /** Server -> client message to set the camera's up direction.
  *
@@ -1242,6 +1243,7 @@ export interface SetCameraPositionMessage {
 export interface SetCameraUpDirectionMessage {
   type: "SetCameraUpDirectionMessage";
   position: [number, number, number];
+  initial: boolean;
 }
 /** Server -> client message to set the camera's look-at point.
  *
@@ -1250,6 +1252,7 @@ export interface SetCameraUpDirectionMessage {
 export interface SetCameraLookAtMessage {
   type: "SetCameraLookAtMessage";
   look_at: [number, number, number];
+  initial: boolean;
 }
 /** Server -> client message to set the camera's near clipping plane.
  *
@@ -1258,6 +1261,7 @@ export interface SetCameraLookAtMessage {
 export interface SetCameraNearMessage {
   type: "SetCameraNearMessage";
   near: number;
+  initial: boolean;
 }
 /** Server -> client message to set the camera's far clipping plane.
  *
@@ -1266,6 +1270,7 @@ export interface SetCameraNearMessage {
 export interface SetCameraFarMessage {
   type: "SetCameraFarMessage";
   far: number;
+  initial: boolean;
 }
 /** Server -> client message to set the camera's field of view.
  *
@@ -1274,6 +1279,7 @@ export interface SetCameraFarMessage {
 export interface SetCameraFovMessage {
   type: "SetCameraFovMessage";
   fov: number;
+  initial: boolean;
 }
 /** Server -> client message to set a scene node's orientation.
  *

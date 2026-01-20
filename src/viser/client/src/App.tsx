@@ -40,6 +40,7 @@ import { ViserModal } from "./Modal";
 import { useSceneTreeState } from "./SceneTreeState";
 import { useEnvironmentState } from "./EnvironmentState";
 import { useDevSettingsStore } from "./DevSettingsStore";
+import { useInitialCameraState } from "./InitialCameraState";
 import { useThrottledMessageSender } from "./WebsocketUtils";
 import { rayToViserCoords } from "./WorldTransformUtils";
 import { theme } from "./AppTheme";
@@ -226,7 +227,7 @@ function ViewerRoot() {
             )
         : () => null,
     sendCamera: null,
-    resetCameraView: null,
+    resetCameraPose: null,
 
     // DOM/Three.js references.
     canvas: null,
@@ -268,6 +269,36 @@ function ViewerRoot() {
   // Create the dev settings store.
   const devSettingsStore = useDevSettingsStore();
 
+  // Create the initial camera store with URL params.
+  const initialCameraState = useInitialCameraState(
+    // Parse URL params once during initialization.
+    React.useMemo(() => {
+      // Helper to parse and validate a vector URL param.
+      const parseVec3 = (param: string): [number, number, number] | null => {
+        const str = searchParams.get(param);
+        if (str === null) return null;
+        const parts = str.split(",").map(Number);
+        if (parts.length !== 3 || !parts.every(Number.isFinite)) return null;
+        return parts as [number, number, number];
+      };
+      // Helper to parse and validate a scalar URL param.
+      const parseScalar = (param: string): number | null => {
+        const str = searchParams.get(param);
+        if (str === null) return null;
+        const val = Number(str);
+        return Number.isFinite(val) ? val : null;
+      };
+      return {
+        position: parseVec3("initialCameraPosition"),
+        lookAt: parseVec3("initialCameraLookAt"),
+        up: parseVec3("initialCameraUp"),
+        fov: parseScalar("initialCameraFov"),
+        near: parseScalar("initialCameraNear"),
+        far: parseScalar("initialCameraFar"),
+      };
+    }, []),
+  );
+
   // Create the context value with hooks and single ref.
   const viewer: ViewerContextContents = {
     messageSource,
@@ -276,6 +307,7 @@ function ViewerRoot() {
     useEnvironment: environmentState,
     useGui: useGuiState(initialServer),
     useDevSettings: devSettingsStore,
+    useInitialCamera: initialCameraState,
     mutable,
   };
 
@@ -556,7 +588,6 @@ function ViewerCanvas({ children }: { children: React.ReactNode }) {
       style={{ position: "relative", zIndex: 0, width: "100%", height: "100%" }}
     >
       <Canvas
-        camera={{ position: [-3.0, 3.0, -3.0], near: 0.01, far: 1000.0 }}
         gl={{ preserveDrawingBuffer: true }}
         style={{ width: "100%", height: "100%" }}
         ref={(el) => (viewer.mutable.current.canvas = el)}
